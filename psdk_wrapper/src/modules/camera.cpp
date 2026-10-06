@@ -1187,7 +1187,7 @@ CameraModule::camera_shoot_interval_photo_cb(
   T_DjiOsalHandler *osalHandler = DjiPlatform_GetOsalHandler();
   E_DjiMountPosition index =
       static_cast<E_DjiMountPosition>(request->payload_index);
-  T_DjiCameraPhotoTimeIntervalSettings interval_data;
+  T_DjiCameraPhotoTimeIntervalSettings interval_data{};
   interval_data.captureCount = request->num_photos_to_capture;
   interval_data.timeIntervalSeconds = request->time_interval;
 

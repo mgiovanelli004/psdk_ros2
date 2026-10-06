@@ -361,7 +361,7 @@ PSDKWrapper::set_environment()
   if (linkConfig.type == DJI_USER_LINK_CONFIG_USE_UART_AND_USB_BULK_DEVICE)
   {
     RCLCPP_INFO(get_logger(), "Using DJI_USE_UART_USB_BULK_DEVICE");
-    T_DjiHalUsbBulkHandler usb_bulk_handler;
+    T_DjiHalUsbBulkHandler usb_bulk_handler{};
     usb_bulk_handler.UsbBulkInit = HalUsbBulk_Init;
     usb_bulk_handler.UsbBulkDeInit = HalUsbBulk_DeInit;
     usb_bulk_handler.UsbBulkWriteData = HalUsbBulk_WriteData;
@@ -379,7 +379,7 @@ PSDKWrapper::set_environment()
   else if (linkConfig.type == DJI_USER_LINK_CONFIG_USE_UART_AND_NETWORK_DEVICE)
   {
     RCLCPP_INFO(get_logger(), "Using DJI_USE_UART_AND_NETWORK_DEVICE");
-    T_DjiHalNetworkHandler network_handler;
+    T_DjiHalNetworkHandler network_handler{};
     network_handler.NetworkInit = HalNetWork_Init;
     network_handler.NetworkDeInit = HalNetWork_DeInit;
     network_handler.NetworkGetDeviceInfo = HalNetWork_GetDeviceInfo;
@@ -672,7 +672,21 @@ PSDKWrapper::init(T_DjiUserInfo *user_info)
     return false;
   }
 
-  if (aircraft_base_info_.mountPosition != DJI_MOUNT_POSITION_EXTENSION_PORT)
+  RCLCPP_INFO(
+      get_logger(),
+      "Aircraft type: %d, adapter type: %d, mount position type: %d, "
+      "mount position: %d",
+      aircraft_base_info_.aircraftType, aircraft_base_info_.djiAdapterType,
+      aircraft_base_info_.mountPositionType, aircraft_base_info_.mountPosition);
+
+  // E-Port (e.g. M300/M350) or E-Port V2 (e.g. M4 series/M400)
+  bool is_extension_port =
+      aircraft_base_info_.mountPosition == DJI_MOUNT_POSITION_EXTENSION_PORT ||
+      aircraft_base_info_.mountPositionType ==
+          DJI_MOUNT_POSITION_TYPE_EXTENSION_PORT_V2 ||
+      aircraft_base_info_.djiAdapterType ==
+          DJI_SDK_ADAPTER_TYPE_EPORT_V2_RIBBON_CABLE;
+  if (!is_extension_port)
   {
     RCLCPP_ERROR(get_logger(), "Please use the extension port");
     return false;

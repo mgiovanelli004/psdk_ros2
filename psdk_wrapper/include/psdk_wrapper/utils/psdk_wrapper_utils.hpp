@@ -204,6 +204,17 @@ const std::map<E_DjiCameraType, std::string> camera_type_str = {
     {DJI_CAMERA_TYPE_M30T, "M30T Camera"},
     {DJI_CAMERA_TYPE_M3E, "M3E Camera"},
     {DJI_CAMERA_TYPE_M3T, "M3T Camera"},
+    {DJI_CAMERA_TYPE_M3TA, "M3TA Camera"},
+    {DJI_CAMERA_TYPE_M3D, "M3D Camera"},
+    {DJI_CAMERA_TYPE_M3TD, "M3TD Camera"},
+    {DJI_CAMERA_TYPE_L2, "Zenmuse L2"},
+    {DJI_CAMERA_TYPE_L3, "Zenmuse L3"},
+    {DJI_CAMERA_TYPE_H30, "Zenmuse H30"},
+    {DJI_CAMERA_TYPE_H30T, "Zenmuse H30T"},
+    {DJI_CAMERA_TYPE_M4T, "M4T Camera"},
+    {DJI_CAMERA_TYPE_M4E, "M4E Camera"},
+    {DJI_CAMERA_TYPE_M4TD, "M4TD Camera"},
+    {DJI_CAMERA_TYPE_M4D, "M4D Camera"},
 };
 
 const std::map<E_DjiLiveViewCameraSource, std::string> camera_source_str = {
