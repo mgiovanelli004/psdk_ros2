@@ -32,6 +32,8 @@ Once you've established the hardware connection between your board and the DJI d
 | Matrice 30/30T | E-Port     | SDK Round Ribbon Cable  | use_uart_and_network_device  |
 | M300 RTK       | OSDK Port  | OSDK Expansion Module   | use_uart_and_usb_bulk_device | 
 
+> **Note:** Since PSDK v3.16.0, the configuration parser expects the `usb_bulk3_device_name`, `usb_bulk3_interface_num`, `usb_bulk3_endpoint_in` and `usb_bulk3_endpoint_out` entries inside `usb_bulk_config`, even if a third USB bulk channel is not used. If you use your own *link_config.json*, copy these entries from the default file, otherwise the wrapper will crash while loading the configuration.
+
 The link configurations represent the different channels DJI uses to send information from the drone to 3rd party development platforms. In very generic terms, these channels are used for:
 * UART serial: used to send commands to the drone and receive most of the information
 * USB Bulk / Network device : used to retrive and send different cameras stream (e.g. main camera, FPV, perception) and perform media file management
