@@ -833,8 +833,15 @@ TelemetryModule::attitude_callback(const uint8_t *data, uint16_t data_size,
   attitude_pub_->publish(quaternion_msg);
 
   /* Save current attitude */
-  std::unique_lock<std::shared_mutex> lock(current_state_mutex_);
-  current_state_.attitude = current_quat_FLU2ENU;
+  {
+    std::unique_lock<std::shared_mutex> lock(current_state_mutex_);
+    current_state_.attitude = current_quat_FLU2ENU;
+  }
+  if (use_composed_imu_)
+  {
+    std::lock_guard<std::mutex> imu_lock(composed_imu_mutex_);
+    has_attitude_ = true;
+  }
   return DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS;
 }
 
@@ -918,7 +925,112 @@ TelemetryModule::angular_rate_body_raw_callback(
   angular_rate_body_raw_msg.vector.y = angular_rate_FLU.getY();
   angular_rate_body_raw_msg.vector.z = angular_rate_FLU.getZ();
   angular_rate_body_raw_pub_->publish(angular_rate_body_raw_msg);
+  if (use_composed_imu_ && params_.imu_frequency > 0)
+  {
+    publish_composed_imu(angular_rate_FLU);
+  }
   return DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS;
+}
+
+void
+TelemetryModule::configure_aircraft_capabilities()
+{
+  const E_DjiAircraftSeries series = aircraft_base_.aircraftSeries;
+  const bool series_known = series != DJI_AIRCRAFT_SERIES_UNKNOWN;
+
+  max_subscription_frequency_ =
+      (!series_known || psdk_utils::supports_high_rate_subscription(series))
+          ? 400
+          : 50;
+
+  if (params_.imu_source == "hard_sync")
+  {
+    use_composed_imu_ = false;
+  }
+  else if (params_.imu_source == "composed")
+  {
+    use_composed_imu_ = true;
+  }
+  else
+  {
+    if (params_.imu_source != "auto")
+    {
+      RCLCPP_WARN(get_logger(),
+                  "Unknown imu_source '%s'. Valid values: auto, hard_sync, "
+                  "composed. Falling back to auto.",
+                  params_.imu_source.c_str());
+    }
+    use_composed_imu_ =
+        series_known && !psdk_utils::supports_hard_sync_imu(series);
+  }
+
+  {
+    std::lock_guard<std::mutex> imu_lock(composed_imu_mutex_);
+    has_attitude_ = false;
+    has_acceleration_raw_ = false;
+  }
+
+  RCLCPP_INFO(
+      get_logger(),
+      "Aircraft %s: max FC subscription frequency %d Hz, IMU source: "
+      "%s",
+      psdk_utils::get_aircraft_type_name(aircraft_base_.aircraftType).c_str(),
+      max_subscription_frequency_,
+      use_composed_imu_ ? "composed (QUATERNION + ANGULAR_RATE_RAW + "
+                          "ACCELERATION_RAW)"
+                        : "HARD_SYNC");
+
+  if (use_composed_imu_ && params_.imu_frequency > 0 &&
+      (params_.attitude_frequency <= 0 || params_.angular_rate_frequency <= 0 ||
+       params_.acceleration_frequency <= 0))
+  {
+    RCLCPP_WARN(
+        get_logger(),
+        "imu_source is 'composed' but data_frequency.attitude, "
+        "data_frequency.angular_velocity or data_frequency.acceleration "
+        "is 0: psdk_ros2/imu will not be published. Set the three "
+        "of them to the same rate (max %d Hz).",
+        max_subscription_frequency_);
+  }
+}
+
+void
+TelemetryModule::publish_composed_imu(const tf2::Vector3 &angular_rate_FLU)
+{
+  tf2::Vector3 acceleration_FLU;
+  {
+    std::lock_guard<std::mutex> imu_lock(composed_imu_mutex_);
+    if (!has_attitude_ || !has_acceleration_raw_)
+    {
+      return;
+    }
+    acceleration_FLU = last_acceleration_raw_FLU_;
+  }
+  tf2::Quaternion attitude_FLU2ENU;
+  {
+    std::shared_lock<std::shared_mutex> lock(current_state_mutex_);
+    attitude_FLU2ENU = current_state_.attitude;
+  }
+
+  sensor_msgs::msg::Imu imu_msg;
+  /* Note: on aircraft other than M300/M350 the subscription timestamps are
+   * the PSDK local reception time, not the aircraft time (PSDK docs), and the
+   * three topics are not sampled together. This IMU is therefore suitable as
+   * an attitude/rate reference, not for tightly-coupled VIO.
+   */
+  imu_msg.header.stamp = this->get_clock()->now();
+  imu_msg.header.frame_id = params_.body_frame;
+  imu_msg.orientation.w = attitude_FLU2ENU.getW();
+  imu_msg.orientation.x = attitude_FLU2ENU.getX();
+  imu_msg.orientation.y = attitude_FLU2ENU.getY();
+  imu_msg.orientation.z = attitude_FLU2ENU.getZ();
+  imu_msg.angular_velocity.x = angular_rate_FLU.getX();
+  imu_msg.angular_velocity.y = angular_rate_FLU.getY();
+  imu_msg.angular_velocity.z = angular_rate_FLU.getZ();
+  imu_msg.linear_acceleration.x = acceleration_FLU.getX();
+  imu_msg.linear_acceleration.y = acceleration_FLU.getY();
+  imu_msg.linear_acceleration.z = acceleration_FLU.getZ();
+  imu_pub_->publish(imu_msg);
 }
 
 T_DjiReturnCode
@@ -1699,6 +1811,12 @@ TelemetryModule::acceleration_body_raw_callback(
   acc_body_raw_msg.accel.linear.y = acc_body_raw_FLU.getY();
   acc_body_raw_msg.accel.linear.z = acc_body_raw_FLU.getZ();
   acceleration_body_raw_pub_->publish(acc_body_raw_msg);
+  if (use_composed_imu_)
+  {
+    std::lock_guard<std::mutex> imu_lock(composed_imu_mutex_);
+    last_acceleration_raw_FLU_ = acc_body_raw_FLU;
+    has_acceleration_raw_ = true;
+  }
   return DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS;
 }
 
@@ -1886,7 +2004,8 @@ void
 TelemetryModule::subscribe_psdk_topics()
 {  // NOLINT(readability/fn_size)
   T_DjiReturnCode return_code;
-  if (params_.imu_frequency > 0)
+  configure_aircraft_capabilities();
+  if (params_.imu_frequency > 0 && !use_composed_imu_)
   {
     return_code = DjiFcSubscription_SubscribeTopic(
         DJI_FC_SUBSCRIPTION_TOPIC_HARD_SYNC,
@@ -2478,8 +2597,18 @@ TelemetryModule::unsubscribe_psdk_topics()
 }
 
 E_DjiDataSubscriptionTopicFreq
-TelemetryModule::get_frequency(const int frequency)
+TelemetryModule::get_frequency(const int requested_frequency)
 {
+  int frequency = requested_frequency;
+  if (frequency > max_subscription_frequency_)
+  {
+    RCLCPP_WARN(get_logger(),
+                "Requested subscription frequency %d Hz is not supported by "
+                "this aircraft (max %d Hz). Using %d Hz instead.",
+                requested_frequency, max_subscription_frequency_,
+                max_subscription_frequency_);
+    frequency = max_subscription_frequency_;
+  }
   switch (frequency)
   {
     case 1:

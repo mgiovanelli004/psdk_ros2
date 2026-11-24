@@ -19,6 +19,11 @@
       perception_camera_frame: "psdk_perception_camera_link"
       publish_transforms: true
 
+      # Source of psdk_ros2/imu: auto | hard_sync | composed
+      #  auto: hard_sync on M300/M350/M30, composed on every other aircraft
+      #  (M3D/3TD, M4E/4T, M4D/4TD, M400 do not provide the HARD_SYNC topic).
+      imu_source: "auto"
+
       file_path: "/logs/media/"
 
       # Mandatory modules to be initialized. Mark with a true those which you
@@ -34,7 +39,12 @@
         hms: false
         perception: false
 
-      data_frequency: # Options are: 1, 5, 10, 50, 100, 200, 400 Hz
+      # Options are: 1, 5, 10, 50, 100, 200, 400 Hz.
+      # Only M300/M350 accept rates above 50 Hz. On M3D, M4 series and M400
+      # rates above 50 Hz are automatically reduced to 50 Hz. PSDK limits:
+      # at most 4 distinct rates, and at most 242 bytes of data per rate.
+      # See cfg/psdk_params_manifold3.yaml for an M4/Manifold 3 example.
+      data_frequency:
         imu: 100
         attitude: 100
         acceleration: 50

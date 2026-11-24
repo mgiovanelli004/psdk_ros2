@@ -25,6 +25,7 @@
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
+#include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <string>
 
@@ -40,6 +41,7 @@ class FlightControlModule : public rclcpp_lifecycle::LifecycleNode
 {
  public:
   using Trigger = std_srvs::srv::Trigger;
+  using SetBool = std_srvs::srv::SetBool;
   using SetHomeFromGPS = psdk_interfaces::srv::SetHomeFromGPS;
   using SetGoHomeAltitude = psdk_interfaces::srv::SetGoHomeAltitude;
   using GetGoHomeAltitude = psdk_interfaces::srv::GetGoHomeAltitude;
@@ -228,6 +230,30 @@ class FlightControlModule : public rclcpp_lifecycle::LifecycleNode
    * @param response Trigger service response
    */
   void release_ctrl_authority_cb(
+      const std::shared_ptr<Trigger::Request> request,
+      const std::shared_ptr<Trigger::Response> response);
+
+  /**
+   * @brief Enable or disable PSDK joystick control while the aircraft is in
+   * Attitude (ATTI) mode, e.g. after losing GNSS and vision positioning.
+   * Wraps DjiFlightController_SetControlInAttitudeModeEnabled(). DJI documents
+   * it for the Matrice 4E/4T only. In ATTI mode, use attitude commands
+   * (psdk_ros2/flight_control_setpoint_rollpitch_yawrate_thrust): velocity
+   * and position commands are not executed.
+   * @param request SetBool request (data: true to enable)
+   * @param response SetBool response
+   */
+  void set_control_in_atti_mode_cb(
+      const std::shared_ptr<SetBool::Request> request,
+      const std::shared_ptr<SetBool::Response> response);
+
+  /**
+   * @brief Get whether PSDK control in ATTI mode is enabled.
+   * Wraps DjiFlightController_GetControlInAttitudeModeEnabled().
+   * @param request Trigger request
+   * @param response Trigger response, message is "true" or "false"
+   */
+  void get_control_in_atti_mode_cb(
       const std::shared_ptr<Trigger::Request> request,
       const std::shared_ptr<Trigger::Response> response);
 
@@ -430,6 +456,8 @@ class FlightControlModule : public rclcpp_lifecycle::LifecycleNode
   rclcpp::Service<Trigger>::SharedPtr cancel_go_home_srv_;
   rclcpp::Service<Trigger>::SharedPtr obtain_ctrl_authority_srv_;
   rclcpp::Service<Trigger>::SharedPtr release_ctrl_authority_srv_;
+  rclcpp::Service<SetBool>::SharedPtr set_control_in_atti_mode_srv_;
+  rclcpp::Service<Trigger>::SharedPtr get_control_in_atti_mode_srv_;
   rclcpp::Service<Trigger>::SharedPtr turn_on_motors_srv_;
   rclcpp::Service<Trigger>::SharedPtr turn_off_motors_srv_;
   rclcpp::Service<Trigger>::SharedPtr takeoff_srv_;

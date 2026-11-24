@@ -2,6 +2,21 @@
 Changelog for package psdk_wrapper
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Upgrade to Payload-SDK v3.18.0 (``PSDK_VERSION`` CMake cache variable)
+* Add ``PSDK_PLATFORM=manifold3``: DJI Manifold 3 USB bulk HAL (FunctionFS)
+* Support ``use_only_usb_bulk_device`` and ``use_only_network_device`` links:
+  the UART HAL is only registered when the selected link uses it
+* Accept ``DJI_MOUNT_POSITION_TYPE_MANIFOLD3_ONBOARD`` and E-Port V3
+* ``imu_source`` parameter: compose ``psdk_ros2/imu`` on aircraft without
+  ``HARD_SYNC`` (M3D, M4 series, M400)
+* Clamp FC subscription rates to 50 Hz on aircraft other than M300/M350
+* New services ``set_control_in_atti_mode`` / ``get_control_in_atti_mode``
+* Add ``cfg/link_config_manifold3.json`` and ``cfg/psdk_params_manifold3.yaml``
+* Fix: define ``_GNU_SOURCE`` (build with GCC >= 14), reject FFmpeg >= 5 at
+  configure time, return value missing in ``get_optical_frame_id``
+
 1.3.2 (2024-07-09)
 ------------------
 * Merge pull request `#110 <https://github.com/umdlife/psdk_ros2/issues/110>`_ from bitcurious/perception

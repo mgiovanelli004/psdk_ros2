@@ -103,6 +103,14 @@ FlightControlModule::on_configure(const rclcpp_lifecycle::State &state)
       "psdk_ros2/release_ctrl_authority",
       std::bind(&FlightControlModule::release_ctrl_authority_cb, this,
                 std::placeholders::_1, std::placeholders::_2));
+  set_control_in_atti_mode_srv_ = create_service<SetBool>(
+      "psdk_ros2/set_control_in_atti_mode",
+      std::bind(&FlightControlModule::set_control_in_atti_mode_cb, this,
+                std::placeholders::_1, std::placeholders::_2));
+  get_control_in_atti_mode_srv_ = create_service<Trigger>(
+      "psdk_ros2/get_control_in_atti_mode",
+      std::bind(&FlightControlModule::get_control_in_atti_mode_cb, this,
+                std::placeholders::_1, std::placeholders::_2));
   turn_on_motors_srv_ = create_service<Trigger>(
       "psdk_ros2/turn_on_motors",
       std::bind(&FlightControlModule::turn_on_motors_cb, this,
@@ -227,6 +235,8 @@ FlightControlModule::on_cleanup(const rclcpp_lifecycle::State &state)
   cancel_go_home_srv_.reset();
   obtain_ctrl_authority_srv_.reset();
   release_ctrl_authority_srv_.reset();
+  set_control_in_atti_mode_srv_.reset();
+  get_control_in_atti_mode_srv_.reset();
   turn_on_motors_srv_.reset();
   turn_off_motors_srv_.reset();
   takeoff_srv_.reset();
@@ -464,6 +474,57 @@ FlightControlModule::release_ctrl_authority_cb(
   }
   RCLCPP_INFO(get_logger(), "Control authority released");
   response->success = true;
+}
+
+void
+FlightControlModule::set_control_in_atti_mode_cb(
+    const std::shared_ptr<SetBool::Request> request,
+    const std::shared_ptr<SetBool::Response> response)
+{
+  auto result = DjiFlightController_SetControlInAttitudeModeEnabled(
+      static_cast<bool>(request->data));
+  if (result != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+  {
+    RCLCPP_ERROR(get_logger(),
+                 "Could not %s PSDK control in ATTI mode. Error code is: "
+                 "%ld. DJI documents this function for Matrice 4E/4T only.",
+                 request->data ? "enable" : "disable", result);
+    response->success = false;
+    response->message =
+        "DjiFlightController_SetControlInAttitudeModeEnabled "
+        "failed, error code " +
+        std::to_string(result);
+    return;
+  }
+  RCLCPP_INFO(get_logger(), "PSDK control in ATTI mode %s",
+              request->data ? "enabled" : "disabled");
+  response->success = true;
+  response->message = request->data ? "enabled" : "disabled";
+}
+
+void
+FlightControlModule::get_control_in_atti_mode_cb(
+    const std::shared_ptr<Trigger::Request> request,
+    const std::shared_ptr<Trigger::Response> response)
+{
+  (void)request;
+  bool enabled = false;
+  auto result = DjiFlightController_GetControlInAttitudeModeEnabled(&enabled);
+  if (result != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+  {
+    RCLCPP_ERROR(get_logger(),
+                 "Could not get PSDK control in ATTI mode status. Error code "
+                 "is: %ld",
+                 result);
+    response->success = false;
+    response->message =
+        "DjiFlightController_GetControlInAttitudeModeEnabled "
+        "failed, error code " +
+        std::to_string(result);
+    return;
+  }
+  response->success = true;
+  response->message = enabled ? "true" : "false";
 }
 
 void

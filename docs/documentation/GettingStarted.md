@@ -32,6 +32,9 @@ Once you've established the hardware connection between your board and the DJI d
 | M350 RTK       | E-Port     | SDK Round Ribbon Cable  | use_uart_and_network_device  | 
 | Matrice 30/30T | E-Port     | SDK Round Ribbon Cable  | use_uart_and_network_device  |
 | M300 RTK       | OSDK Port  | OSDK Expansion Module   | use_uart_and_usb_bulk_device | 
+| Matrice 4E/4T, 4D/4TD, 400 | E-Port / E-Port V2 | DJI Manifold 3 (onboard) | use_only_usb_bulk_device (*not flight-tested*) |
+
+> **Note:** On the Matrice 4 series and Matrice 400, PSDK flight control, perception data and the other advanced functions require the DJI Manifold 3. The Manifold 3 has no UART link to the aircraft: build with `-DPSDK_PLATFORM=manifold3` and use *cfg/link_config_manifold3.json* and *cfg/psdk_params_manifold3.yaml*. See [Manifold 3](Manifold3.md).
 
 > **Note:** Since PSDK v3.16.0, the configuration parser expects the `usb_bulk3_device_name`, `usb_bulk3_interface_num`, `usb_bulk3_endpoint_in` and `usb_bulk3_endpoint_out` entries inside `usb_bulk_config`, even if a third USB bulk channel is not used. If you use your own *link_config.json*, copy these entries from the default file, otherwise the wrapper will crash while loading the configuration.
 

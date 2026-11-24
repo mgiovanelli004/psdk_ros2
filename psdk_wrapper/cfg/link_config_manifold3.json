@@ -1,0 +1,23 @@
+{
+    "dji_sdk_link_config": {
+        "link_available": "use_only_usb_bulk_device",
+        "link_note": "DJI Manifold 3 (M4E/4T, M4D/4TD, M400): USB bulk only, no UART. Build psdk_wrapper with -DPSDK_PLATFORM=manifold3. The Manifold 3 HAL (PSDK samples/sample_c++/platform/linux/manifold3/hal) uses fixed FunctionFS endpoints, the values below mirror it. In a box-* container pass through /dev/usb-ffs/bulk2 and /dev/usb-ffs/bulk3 (and bulk6 for perception/media) with --functionfs, plus --network host.",
+        "link_select": "use_only_usb_bulk_device",
+        "usb_bulk_config": {
+            "usb_device_vid": "0x2CA3",
+            "usb_device_pid": "0x3181",
+            "usb_bulk1_device_name": "/dev/usb-ffs/bulk2",
+            "usb_bulk1_interface_num": "2",
+            "usb_bulk1_endpoint_in": "0x83",
+            "usb_bulk1_endpoint_out": "0x02",
+            "usb_bulk2_device_name": "/dev/usb-ffs/bulk6",
+            "usb_bulk2_interface_num": "6",
+            "usb_bulk2_endpoint_in": "0x87",
+            "usb_bulk2_endpoint_out": "0x06",
+            "usb_bulk3_device_name": "/dev/usb-ffs/bulk3",
+            "usb_bulk3_interface_num": "3",
+            "usb_bulk3_endpoint_in": "0x84",
+            "usb_bulk3_endpoint_out": "0x03"
+        }
+    }
+}

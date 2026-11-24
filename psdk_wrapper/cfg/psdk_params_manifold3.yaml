@@ -1,0 +1,68 @@
+# Example psdk_wrapper parameters for a DJI Manifold 3 on Matrice 4E/4T,
+# Matrice 4D/4TD or Matrice 400 (PSDK >= 3.12, build with
+# -DPSDK_PLATFORM=manifold3 and use cfg/link_config_manifold3.json).
+#
+# Differences with psdk_params.yaml:
+#  - every FC subscription topic is capped at 50 Hz on these aircraft;
+#  - DJI_FC_SUBSCRIPTION_TOPIC_HARD_SYNC is not available, so psdk_ros2/imu is
+#    composed from attitude + raw angular rate + raw acceleration
+#    (imu_source: auto -> composed). attitude, acceleration and
+#    angular_velocity must be > 0 and should share the same rate;
+#  - PSDK accepts at most 4 distinct rates (here 1, 5, 10, 50 Hz) and at most
+#    242 bytes per rate. The 50 Hz group below uses about 110 bytes.
+#  - Subscription timestamps on these aircraft are the PSDK local reception
+#    time (no aircraft-time synchronisation), see the PSDK data subscription
+#    docs. Do not rely on this IMU for tightly-coupled VIO.
+/**:
+    ros__parameters:
+      app_name: "YourPSDK"
+      app_id: "YourID"
+      app_key: "YourAppKey"
+      app_license: "YourAppLicense"
+      developer_account: "YourDeveloperAccount"
+      baudrate: "921600"  # not used by the USB bulk link, but still required
+
+      num_of_initialization_retries: 3
+
+      tf_frame_prefix: ""
+      imu_frame: "psdk_imu_link"
+      body_frame: "psdk_base_link"
+      map_frame: "psdk_map_enu"
+      gimbal_base_frame: "psdk_gimbal_base_link"
+      gimbal_frame: "psdk_gimbal_link"
+      camera_frame: "psdk_camera_link"
+      perception_camera_frame: "psdk_perception_camera_link"
+      publish_transforms: true
+
+      imu_source: "auto"
+
+      # Inside a box-* container only /workspace survives box-rm
+      file_path: "/workspace/media/"
+
+      mandatory_modules:
+        telemetry: true
+        flight_control: true
+        camera: false
+        gimbal: false
+        liveview: false
+        hms: false
+        perception: false
+
+      data_frequency:
+        imu: 50               # composed IMU, follows angular_velocity
+        attitude: 50          # QUATERNION (16 B)
+        acceleration: 50      # GROUND + BODY + RAW (36 B)
+        velocity: 50          # VELOCITY (13 B)
+        angular_velocity: 50  # FUSIONED + RAW (24 B)
+        position: 50          # POSITION_VO (13 B)
+        altitude: 50          # FUSED + BAROMETER (8 B)
+        gps_fused_position: 10
+        gps_data: 5
+        rtk_data: 5
+        magnetometer: 10
+        rc_channels_data: 1
+        gimbal_data: 1
+        flight_status: 10     # display mode: detect the switch to ATTI quickly
+        battery_level: 1
+        control_information: 1
+        esc_data_frequency: 1

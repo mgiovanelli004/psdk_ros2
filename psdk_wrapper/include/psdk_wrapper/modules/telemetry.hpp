@@ -29,6 +29,7 @@
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <memory>
+#include <mutex>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <sensor_msgs/msg/battery_state.hpp>
@@ -292,6 +293,17 @@ class TelemetryModule : public rclcpp_lifecycle::LifecycleNode
     std::string camera_frame;
     std::string tf_frame_prefix;
     bool publish_transforms;
+    /**
+     * Source of the psdk_ros2/imu topic:
+     *  - "auto" (default): hard_sync on M300/M350/M30, composed otherwise.
+     *  - "hard_sync": DJI_FC_SUBSCRIPTION_TOPIC_HARD_SYNC (up to 400 Hz on
+     *    M300/M350). Not available on M3D/M4/M4D/M400.
+     *  - "composed": built from the QUATERNION, ANGULAR_RATE_RAW and
+     *    ACCELERATION_RAW topics (max 50 Hz on M3D/M4/M4D/M400). Its rate is
+     *    driven by data_frequency.angular_velocity, which together with
+     *    data_frequency.attitude and data_frequency.acceleration must be > 0.
+     */
+    std::string imu_source{"auto"};
     int imu_frequency;
     int attitude_frequency;
     int acceleration_frequency;
@@ -1110,6 +1122,30 @@ class TelemetryModule : public rclcpp_lifecycle::LifecycleNode
   E_DjiCameraType camera_type_;
   bool publish_camera_transforms_{false};
   bool is_module_initialized_{false};
+
+  /* Maximum FC subscription frequency supported by the connected aircraft.
+   * 400 Hz on M300/M350, 50 Hz on every other model (PSDK docs). */
+  int max_subscription_frequency_{400};
+  /* psdk_ros2/imu composed from separate topics (aircraft without HARD_SYNC)
+   */
+  bool use_composed_imu_{false};
+  std::mutex composed_imu_mutex_;
+  tf2::Vector3 last_acceleration_raw_FLU_{0.0, 0.0, 0.0};
+  bool has_acceleration_raw_{false};
+  bool has_attitude_{false};
+
+  /**
+   * @brief Selects the IMU source and the maximum subscription frequency
+   * according to the connected aircraft (see TelemetryParams::imu_source).
+   */
+  void configure_aircraft_capabilities();
+
+  /**
+   * @brief Publishes psdk_ros2/imu from the latest attitude, raw angular rate
+   * and raw acceleration (used when HARD_SYNC is not available).
+   * @param angular_rate_FLU raw angular rate in FLU body frame [rad/s]
+   */
+  void publish_composed_imu(const tf2::Vector3& angular_rate_FLU);
 
   mutable std::shared_mutex current_state_mutex_;
   mutable std::shared_mutex global_ptr_mutex_;

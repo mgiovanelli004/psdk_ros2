@@ -65,6 +65,7 @@ PSDKWrapper::PSDKWrapper(const std::string &node_name)
   declare_parameter("perception_camera_frame",
                     rclcpp::ParameterValue("psdk_perception_camera_link"));
   declare_parameter("publish_transforms", rclcpp::ParameterValue(true));
+  declare_parameter("imu_source", rclcpp::ParameterValue("auto"));
   declare_parameter("hms_return_codes_path", rclcpp::ParameterValue(""));
   declare_parameter("file_path", rclcpp::ParameterValue("/logs/media/"));
 
@@ -338,15 +339,10 @@ PSDKWrapper::set_environment()
   }
   RCLCPP_INFO(get_logger(), "Registered OSAL handler");
 
-  return_code = DjiPlatform_RegHalUartHandler(&uart_handler);
-  if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
-  {
-    RCLCPP_ERROR(get_logger(), "Register HAL handler error. Error code is: %ld",
-                 return_code);
-    return false;
-  }
-  RCLCPP_INFO(get_logger(), "Registered HAL handler");
-
+  // The link configuration is loaded before registering the HAL handlers, so
+  // that only the handlers required by the selected link are registered.
+  // Manifold 3 (M4/M4D/M400) only offers USB bulk (no UART), see
+  // samples/sample_c++/platform/linux/manifold3 in PSDK >= 3.12.
   return_code = DjiUserConfigManager_LoadConfiguration(
       params_.link_config_file_path.c_str());
   if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
@@ -358,9 +354,47 @@ PSDKWrapper::set_environment()
   }
   RCLCPP_INFO(get_logger(), "Loaded configuration file");
   DjiUserConfigManager_GetLinkConfig(&linkConfig);
-  if (linkConfig.type == DJI_USER_LINK_CONFIG_USE_UART_AND_USB_BULK_DEVICE)
+
+  const bool uses_uart =
+      linkConfig.type == DJI_USER_LINK_CONFIG_USE_ONLY_UART ||
+      linkConfig.type == DJI_USER_LINK_CONFIG_USE_UART_AND_USB_BULK_DEVICE ||
+      linkConfig.type == DJI_USER_LINK_CONFIG_USE_UART_AND_NETWORK_DEVICE;
+  const bool uses_usb_bulk =
+      linkConfig.type == DJI_USER_LINK_CONFIG_USE_UART_AND_USB_BULK_DEVICE ||
+      linkConfig.type == DJI_USER_LINK_CONFIG_USE_ONLY_USB_BULK_DEVICE;
+  const bool uses_network =
+      linkConfig.type == DJI_USER_LINK_CONFIG_USE_UART_AND_NETWORK_DEVICE ||
+      linkConfig.type == DJI_USER_LINK_CONFIG_USE_ONLY_NETWORK_DEVICE;
+
+#ifdef PSDK_PLATFORM_MANIFOLD3
+  if (linkConfig.type != DJI_USER_LINK_CONFIG_USE_ONLY_USB_BULK_DEVICE)
   {
-    RCLCPP_INFO(get_logger(), "Using DJI_USE_UART_USB_BULK_DEVICE");
+    RCLCPP_WARN(get_logger(),
+                "Built for Manifold 3 but link_select is not "
+                "'use_only_usb_bulk_device'. Manifold 3 has no UART link to "
+                "the aircraft; check your link_config.json "
+                "(see cfg/link_config_manifold3.json).");
+  }
+#endif
+
+  if (uses_uart)
+  {
+    return_code = DjiPlatform_RegHalUartHandler(&uart_handler);
+    if (return_code != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)
+    {
+      RCLCPP_ERROR(get_logger(),
+                   "Register HAL UART handler error. Error code is: %ld",
+                   return_code);
+      return false;
+    }
+    RCLCPP_INFO(get_logger(), "Registered HAL UART handler");
+  }
+
+  if (uses_usb_bulk)
+  {
+    RCLCPP_INFO(get_logger(), "Using %s",
+                uses_uart ? "DJI_USE_UART_AND_USB_BULK_DEVICE"
+                          : "DJI_USE_ONLY_USB_BULK_DEVICE");
     T_DjiHalUsbBulkHandler usb_bulk_handler{};
     usb_bulk_handler.UsbBulkInit = HalUsbBulk_Init;
     usb_bulk_handler.UsbBulkDeInit = HalUsbBulk_DeInit;
@@ -376,9 +410,11 @@ PSDKWrapper::set_environment()
       return false;
     }
   }
-  else if (linkConfig.type == DJI_USER_LINK_CONFIG_USE_UART_AND_NETWORK_DEVICE)
+  else if (uses_network)
   {
-    RCLCPP_INFO(get_logger(), "Using DJI_USE_UART_AND_NETWORK_DEVICE");
+    RCLCPP_INFO(get_logger(), "Using %s",
+                uses_uart ? "DJI_USE_UART_AND_NETWORK_DEVICE"
+                          : "DJI_USE_ONLY_NETWORK_DEVICE");
     T_DjiHalNetworkHandler network_handler{};
     network_handler.NetworkInit = HalNetWork_Init;
     network_handler.NetworkDeInit = HalNetWork_DeInit;
@@ -532,6 +568,8 @@ PSDKWrapper::load_parameters()
                             telemetry_module_->params_.camera_frame);
     get_parameter("publish_transforms",
                   telemetry_module_->params_.publish_transforms);
+    get_non_mandatory_param("imu_source",
+                            telemetry_module_->params_.imu_source);
     // Get data frequency
     get_and_validate_frequency("data_frequency.imu",
                                telemetry_module_->params_.imu_frequency,
@@ -674,22 +712,43 @@ PSDKWrapper::init(T_DjiUserInfo *user_info)
 
   RCLCPP_INFO(
       get_logger(),
-      "Aircraft type: %d, adapter type: %d, mount position type: %d, "
+      "Aircraft type: %d (%s), adapter type: %d, mount position type: %d, "
       "mount position: %d",
-      aircraft_base_info_.aircraftType, aircraft_base_info_.djiAdapterType,
-      aircraft_base_info_.mountPositionType, aircraft_base_info_.mountPosition);
+      aircraft_base_info_.aircraftType,
+      psdk_utils::get_aircraft_type_name(aircraft_base_info_.aircraftType)
+          .c_str(),
+      aircraft_base_info_.djiAdapterType, aircraft_base_info_.mountPositionType,
+      aircraft_base_info_.mountPosition);
 
-  // E-Port (e.g. M300/M350) or E-Port V2 (e.g. M4 series/M400)
+  // E-Port (e.g. M300/M350/M30/M3D), E-Port V2 / V3 (e.g. M4 series, M400,
+  // M5) or the Manifold 3 onboard computer. Manifold 3 reports
+  // DJI_MOUNT_POSITION_TYPE_MANIFOLD3_ONBOARD (see PSDK samples, e.g.
+  // test_liveview.c), which the previous check rejected.
   bool is_extension_port =
       aircraft_base_info_.mountPosition == DJI_MOUNT_POSITION_EXTENSION_PORT ||
       aircraft_base_info_.mountPositionType ==
+          DJI_MOUNT_POSITION_TYPE_EXTENSION_PORT ||
+      aircraft_base_info_.mountPositionType ==
           DJI_MOUNT_POSITION_TYPE_EXTENSION_PORT_V2 ||
+      aircraft_base_info_.mountPositionType ==
+          DJI_MOUNT_POSITION_TYPE_EXTENSION_PORT_V3 ||
+      aircraft_base_info_.mountPositionType ==
+          DJI_MOUNT_POSITION_TYPE_MANIFOLD3_ONBOARD ||
       aircraft_base_info_.djiAdapterType ==
-          DJI_SDK_ADAPTER_TYPE_EPORT_V2_RIBBON_CABLE;
+          DJI_SDK_ADAPTER_TYPE_EPORT_V2_RIBBON_CABLE ||
+      aircraft_base_info_.djiAdapterType ==
+          DJI_SDK_ADAPTER_TYPE_EPORT_V3_RIBBON_CABLE;
   if (!is_extension_port)
   {
-    RCLCPP_ERROR(get_logger(), "Please use the extension port");
+    RCLCPP_ERROR(get_logger(),
+                 "Please use the extension port (E-Port) or a Manifold 3. "
+                 "Flight control is not available from a payload port.");
     return false;
+  }
+  if (aircraft_base_info_.mountPositionType ==
+      DJI_MOUNT_POSITION_TYPE_MANIFOLD3_ONBOARD)
+  {
+    RCLCPP_INFO(get_logger(), "Running on DJI Manifold 3");
   }
 
   if (DjiCore_SetAlias("PSDK_App") != DJI_ERROR_SYSTEM_MODULE_CODE_SUCCESS)

@@ -260,6 +260,58 @@ double inline deg_to_rad(const double degrees)
 {
   return (degrees * C_PI) / 180;
 };
+
+/**
+ * @brief Human readable name of the aircraft type reported by PSDK.
+ */
+inline std::string
+get_aircraft_type_name(const E_DjiAircraftType aircraft_type)
+{
+  static const std::map<E_DjiAircraftType, std::string> aircraft_type_str = {
+      {DJI_AIRCRAFT_TYPE_M300_RTK, "Matrice 300 RTK"},
+      {DJI_AIRCRAFT_TYPE_M350_RTK, "Matrice 350 RTK"},
+      {DJI_AIRCRAFT_TYPE_M30, "Matrice 30"},
+      {DJI_AIRCRAFT_TYPE_M30T, "Matrice 30T"},
+      {DJI_AIRCRAFT_TYPE_M3E, "Mavic 3E"},
+      {DJI_AIRCRAFT_TYPE_M3T, "Mavic 3T"},
+      {DJI_AIRCRAFT_TYPE_M3D, "Matrice 3D"},
+      {DJI_AIRCRAFT_TYPE_M3TD, "Matrice 3TD"},
+      {DJI_AIRCRAFT_TYPE_M4E, "Matrice 4E"},
+      {DJI_AIRCRAFT_TYPE_M4T, "Matrice 4T"},
+      {DJI_AIRCRAFT_TYPE_M4D, "Matrice 4D"},
+      {DJI_AIRCRAFT_TYPE_M4TD, "Matrice 4TD"},
+      {DJI_AIRCRAFT_TYPE_M400, "Matrice 400"},
+      {DJI_AIRCRAFT_TYPE_M5T, "Matrice 5T"},
+      {DJI_AIRCRAFT_TYPE_M5TD, "Matrice 5TD"},
+  };
+  auto it = aircraft_type_str.find(aircraft_type);
+  return it != aircraft_type_str.end() ? it->second : "Unknown";
+}
+
+/**
+ * @brief Whether the aircraft supports FC subscription topics above 50 Hz and
+ * the 400 Hz DJI_FC_SUBSCRIPTION_TOPIC_HARD_SYNC IMU topic.
+ * According to the PSDK data subscription table, only the Matrice 300 RTK and
+ * Matrice 350 RTK do. Matrice 30/30T support HARD_SYNC up to 50 Hz, while
+ * Matrice 3D/3TD, Matrice 4 series, Matrice 400 and newer models cap every
+ * topic at 50 Hz and do not provide HARD_SYNC at all.
+ */
+inline bool
+supports_high_rate_subscription(const E_DjiAircraftSeries aircraft_series)
+{
+  return aircraft_series == DJI_AIRCRAFT_SERIES_M300 ||
+         aircraft_series == DJI_AIRCRAFT_SERIES_M350;
+}
+
+/**
+ * @brief Whether the aircraft provides DJI_FC_SUBSCRIPTION_TOPIC_HARD_SYNC.
+ */
+inline bool
+supports_hard_sync_imu(const E_DjiAircraftSeries aircraft_series)
+{
+  return supports_high_rate_subscription(aircraft_series) ||
+         aircraft_series == DJI_AIRCRAFT_SERIES_M30;
+}
 };  // namespace psdk_utils
 }  // namespace psdk_ros2
 

@@ -15,7 +15,7 @@ The `psdk_ros2` wrapper currently supports the following features:
 
 ## Compatibility 
 
-The current version supports **PSDK v3.16.0** and it has been tested and built for **ROS 2 Humble**. For firmware and product compatibility, please check the page [DJI Developer - PSDK](https://developer.dji.com/doc/payload-sdk-tutorial/en/). 
+The current version supports **PSDK v3.18.0** (configurable with `-DPSDK_VERSION`) and it has been tested and built for **ROS 2 Humble**. The DJI Manifold 3 (Matrice 4E/4T, 4D/4TD, 400) is supported at build level with `-DPSDK_PLATFORM=manifold3`, see [Manifold 3](docs/documentation/Manifold3.md); it has not been flight-tested yet. For firmware and product compatibility, please check the page [DJI Developer - PSDK](https://developer.dji.com/doc/payload-sdk-tutorial/en/). 
 
 In terms of hardware used for testing this wrapper, our primary testing platform has been the DJI M300 RTK drone, to which an external board has been connected via the OSDK expansion module. As for the payloads, H20 and H20T cameras have been tested. 
 

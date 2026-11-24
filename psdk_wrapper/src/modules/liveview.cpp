@@ -385,6 +385,9 @@ LiveviewModule::get_optical_frame_id()
       return it.second;
     }
   }
+  // Previously the function fell off the end (undefined behaviour) when the
+  // camera source was not in the map, e.g. for new M4/M5 sources.
+  return "unknown_camera_source";
 }
 
 }  // namespace psdk_ros2
