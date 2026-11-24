@@ -173,6 +173,15 @@ class PSDKWrapper : public rclcpp_lifecycle::LifecycleNode
   bool set_environment();
 
   /**
+   * @brief Check that the Manifold 3 USB bulk FunctionFS endpoints used by
+   * the DJI Manifold 3 HAL exist (bulk2 and bulk3 mandatory, bulk6 for
+   * perception and media download). Without them the DJI HAL crashes inside
+   * DjiCore_Init, e.g. in a box-* container started without --functionfs.
+   * @return true if the mandatory endpoints exist
+   */
+  bool check_manifold3_functionfs_endpoints();
+
+  /**
    * @brief Set the user information for the PSDK application
    * @param user_info object containing the main information regarding the psdk
    * application

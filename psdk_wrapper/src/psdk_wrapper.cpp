@@ -19,6 +19,10 @@
 
 #include "psdk_wrapper/psdk_wrapper.hpp"
 
+#include <unistd.h>
+
+#include <string>
+
 std::shared_ptr<psdk_ros2::TelemetryModule> psdk_ros2::global_telemetry_ptr_;
 std::shared_ptr<psdk_ros2::CameraModule> psdk_ros2::global_camera_ptr_;
 std::shared_ptr<psdk_ros2::LiveviewModule> psdk_ros2::global_liveview_ptr_;
@@ -270,6 +274,50 @@ PSDKWrapper::on_shutdown(const rclcpp_lifecycle::State &state)
 }
 
 bool
+PSDKWrapper::check_manifold3_functionfs_endpoints()
+{
+  // Endpoints hard-coded in PSDK samples/sample_c++/platform/linux/manifold3/
+  // hal/hal_usb_bulk.h
+  struct Channel
+  {
+    const char *dir;
+    bool mandatory;
+  };
+  const Channel channels[] = {{"/dev/usb-ffs/bulk2", true},
+                              {"/dev/usb-ffs/bulk3", true},
+                              {"/dev/usb-ffs/bulk6", false}};
+  bool ok = true;
+  for (const auto &channel : channels)
+  {
+    const std::string ep1 = std::string(channel.dir) + "/ep1";
+    const std::string ep2 = std::string(channel.dir) + "/ep2";
+    if (access(ep1.c_str(), F_OK) == 0 && access(ep2.c_str(), F_OK) == 0)
+    {
+      continue;
+    }
+    if (channel.mandatory)
+    {
+      RCLCPP_ERROR(get_logger(),
+                   "Manifold 3 USB bulk endpoint %s/ep1|ep2 not found. On the "
+                   "host check that usb_bulk_raw is running; in a box-* "
+                   "container add '--functionfs %s' and '--network host' to "
+                   "box-run.",
+                   channel.dir, channel.dir);
+      ok = false;
+    }
+    else
+    {
+      RCLCPP_WARN(get_logger(),
+                  "Optional Manifold 3 USB bulk endpoint %s not found: "
+                  "perception images and media download may not work "
+                  "(box-run --functionfs %s).",
+                  channel.dir, channel.dir);
+    }
+  }
+  return ok;
+}
+
+bool
 PSDKWrapper::set_environment()
 {
   RCLCPP_INFO(get_logger(), "Setting environment");
@@ -374,6 +422,10 @@ PSDKWrapper::set_environment()
                 "'use_only_usb_bulk_device'. Manifold 3 has no UART link to "
                 "the aircraft; check your link_config.json "
                 "(see cfg/link_config_manifold3.json).");
+  }
+  if (uses_usb_bulk && !check_manifold3_functionfs_endpoints())
+  {
+    return false;
   }
 #endif
 

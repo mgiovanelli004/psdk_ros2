@@ -13,6 +13,8 @@ Forthcoming
   ``HARD_SYNC`` (M3D, M4 series, M400)
 * Clamp FC subscription rates to 50 Hz on aircraft other than M300/M350
 * New services ``set_control_in_atti_mode`` / ``get_control_in_atti_mode``
+* Manifold 3: check the FunctionFS endpoints before PSDK init (the DJI HAL
+  crashes in ``DjiCore_Init`` when they are missing)
 * Add ``cfg/link_config_manifold3.json`` and ``cfg/psdk_params_manifold3.yaml``
 * Fix: define ``_GNU_SOURCE`` (build with GCC >= 14), reject FFmpeg >= 5 at
   configure time, return value missing in ``get_optical_frame_id``
